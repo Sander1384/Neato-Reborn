@@ -95,7 +95,14 @@ bool MappingManager::start(std::function<void(bool)> callback) {
             lastUiState = robotState.uiState;
             lastRobotState = robotState.robotState;
 
-            if (robotState.uiState.indexOf("IDLE") < 0) {
+            // A docked D3-D7 normally reports either IDLE or STANDBY,
+            // depending on firmware/power state. Physical dock contact was
+            // already verified above, so both are valid mapping start states.
+            const bool readyOnDock =
+                    robotState.uiState.indexOf("IDLE") >= 0 ||
+                    robotState.uiState.indexOf("STANDBY") >= 0;
+
+            if (!readyOnDock) {
                 failStart("robot_not_idle");
                 return;
             }
