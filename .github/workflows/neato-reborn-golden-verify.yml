@@ -11,28 +11,45 @@ permissions:
 
 jobs:
   golden-c3:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout exact golden source
+      - name: Checkout verifier
         uses: actions/checkout@v7
-        with:
-          ref: c295660c7ec9bbcfdec55bf6283901f8d328d0a3
+
+      - name: Recreate historical OpenNeato build path
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          GOLDEN="c295660c7ec9bbcfdec55bf6283901f8d328d0a3"
+          BUILDROOT="/home/runner/work/OpenNeato/OpenNeato"
+
+          rm -rf /home/runner/work/OpenNeato
+          mkdir -p /home/runner/work/OpenNeato
+
+          git clone https://github.com/Sander1384/Neato-Reborn.git "$BUILDROOT"
+
+          cd "$BUILDROOT"
+          git checkout "$GOLDEN"
+
+          echo "BUILDROOT=$(pwd)"
+          echo "HEAD=$(git rev-parse HEAD)"
+
+          test "$(git rev-parse HEAD)" = "$GOLDEN"
 
       - name: Set up Node 22
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+      - name: Build frontend in historical path
+        working-directory: /home/runner/work/OpenNeato/OpenNeato/frontend
+        run: |
+          node --version
+          npm --version
+          npm ci
+          npm run build
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
@@ -40,35 +57,71 @@ jobs:
           python-version: "3.12"
 
       - name: Install exact PlatformIO
-        run: pip install -r .github/platformio-requirements.txt
+        run: |
+          python --version
+          pip install -r /home/runner/work/OpenNeato/OpenNeato/.github/platformio-requirements.txt
+          pio --version
 
-      - name: Build golden C3 release
+      - name: Build v0.15 in historical path
+        working-directory: /home/runner/work/OpenNeato/OpenNeato
         env:
           FIRMWARE_VERSION: "0.15"
-        run: pio run -e c3-release
+        run: |
+          pio run -e c3-release
 
-      - name: Verify golden SHA256
+      - name: Compare against official v0.15
         shell: bash
         run: |
-          FILE=".pio/build/c3-release/openneato-esp32-c3-firmware.bin"
-          EXPECTED="9bfb5bc6110dd771689e990abcefe32762e5b20000850a7b2f4931ccad23f943"
+          set -euo pipefail
 
-          ACTUAL="$(sha256sum "$FILE" | awk '{print $1}')"
+          BUILT="/home/runner/work/OpenNeato/OpenNeato/.pio/build/c3-release/openneato-esp32-c3-firmware.bin"
+          OFFICIAL="/tmp/openneato-official-v0.15.bin"
 
-          echo "Built:    $ACTUAL"
-          echo "Expected: $EXPECTED"
+          curl -L --fail \
+            "https://github.com/renjfk/OpenNeato/releases/download/v0.15/openneato-esp32-c3-firmware.bin" \
+            -o "$OFFICIAL"
 
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::Golden firmware SHA256 mismatch"
-            exit 1
+          echo "===== FILE SIZES ====="
+          stat --printf="Built:    %s bytes\n" "$BUILT"
+          stat --printf="Official: %s bytes\n" "$OFFICIAL"
+
+          echo
+          echo "===== SHA256 ====="
+
+          BUILT_HASH="$(sha256sum "$BUILT" | awk '{print $1}')"
+          OFFICIAL_HASH="$(sha256sum "$OFFICIAL" | awk '{print $1}')"
+
+          echo "Built:    $BUILT_HASH"
+          echo "Official: $OFFICIAL_HASH"
+
+          echo
+          echo "===== BUILD PATH STRINGS ====="
+
+          echo "--- Built ---"
+          strings "$BUILT" | grep -F "/home/runner/work" | head -20 || true
+
+          echo "--- Official ---"
+          strings "$OFFICIAL" | grep -F "/home/runner/work" | head -20 || true
+
+          if cmp -s "$BUILT" "$OFFICIAL"; then
+            echo
+            echo "GOLDEN BYTE MATCH: PASS"
+            exit 0
           fi
 
-          echo "GOLDEN BYTE MATCH: PASS"
+          echo
+          echo "GOLDEN BYTE MATCH: DIFFERENT"
 
-      - name: Upload verified firmware
+          echo
+          echo "===== FIRST BYTE DIFFERENCES ====="
+          cmp -l "$BUILT" "$OFFICIAL" | head -40 || true
+
+          echo "::error::Golden firmware still differs from official v0.15"
+          exit 1
+
+      - name: Upload diagnostic firmware
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: nr-golden-v0.15-verified
-          path: |
-            .pio/build/c3-release/openneato-esp32-c3-firmware.bin
-            .pio/build/c3-release/openneato-esp32-c3-full.tar.gz
+          name: nr-golden-v0.15-diagnostic
+          path: /home/runner/work/OpenNeato/OpenNeato/.pio/build/c3-release/openneato-esp32-c3-firmware.bin
