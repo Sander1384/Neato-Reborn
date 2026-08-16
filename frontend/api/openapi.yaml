@@ -30,6 +30,8 @@ tags:
     description: Cleaning session history and map data
   - name: Mapping
     description: Native map-only runs using the robot's own SLAM and navigation
+  - name: Floorplans
+    description: Named protected history sessions used as reusable floorplans
 paths:
   /api/version:
     get:
@@ -444,6 +446,87 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/floorplans:
+    get:
+      tags:
+        - Floorplans
+      summary: List saved floorplans
+      responses:
+        "200":
+          description: Saved floorplans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - session
+                    - name
+                    - size
+                    - compressed
+                  properties:
+                    id:
+                      type: string
+                    session:
+                      type: string
+                    name:
+                      type: string
+                    size:
+                      type: integer
+                    compressed:
+                      type: boolean
+                    summary:
+                      nullable: true
+                      allOf:
+                        - $ref: "#/components/schemas/MapSummary"
+    post:
+      tags:
+        - Floorplans
+      summary: Pin or rename one completed history session as a floorplan
+      parameters:
+        - name: session
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 48
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "409":
+          description: Session cannot be pinned or floorplan limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/floorplans/{session}:
+    delete:
+      tags:
+        - Floorplans
+      summary: Unpin a saved floorplan without deleting its history/map data
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          description: Floorplan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/manual/status:
     get:
       tags:

@@ -829,10 +829,250 @@ void CleaningHistory::writeSnapshot(float x, float y, float theta, float time) {
     }
 }
 
+// -- Saved floorplans ---------------------------------------------------------
+
+bool CleaningHistory::isStableHistoryFilename(const String& filename) {
+    if (filename.isEmpty() || filename.indexOf('/') >= 0 || filename.indexOf('\\') >= 0 ||
+        filename.indexOf("..") >= 0) {
+        return false;
+    }
+    return filename.endsWith(".jsonl") || filename.endsWith(".jsonl.hs");
+}
+
+void CleaningHistory::ensureFloorplansLoaded() {
+    if (floorplansLoaded)
+        return;
+
+    floorplansLoaded = true;
+    floorplans.clear();
+
+    // Recover the previous registry if power was lost between the two rename steps.
+    if (!SPIFFS.exists(FLOORPLAN_REGISTRY_PATH) && SPIFFS.exists(FLOORPLAN_REGISTRY_BAK_PATH)) {
+        SPIFFS.rename(FLOORPLAN_REGISTRY_BAK_PATH, FLOORPLAN_REGISTRY_PATH);
+    }
+
+    File file = SPIFFS.open(FLOORPLAN_REGISTRY_PATH, FILE_READ);
+    if (!file)
+        return;
+
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.isEmpty())
+            continue;
+
+        auto fields = fieldsFromJson(line);
+        const Field *sessionField = findField(fields, "session");
+        const Field *nameField = findField(fields, "name");
+
+        if (!sessionField || !nameField)
+            continue;
+
+        String session = sessionField->value;
+        String name = nameField->value;
+        name.trim();
+
+        if (!isStableHistoryFilename(session) || name.isEmpty())
+            continue;
+
+        // Only load live references. A formatted/corrupt filesystem cannot leave
+        // a phantom floorplan entry pointing at missing map bytes.
+        String path = String(HISTORY_DIR) + "/" + session;
+        if (!SPIFFS.exists(path))
+            continue;
+
+        floorplans[session] = name;
+    }
+
+    file.close();
+}
+
+bool CleaningHistory::persistFloorplans() {
+    floorplanError = "";
+
+    SPIFFS.remove(FLOORPLAN_REGISTRY_TMP_PATH);
+
+    File tmp = SPIFFS.open(FLOORPLAN_REGISTRY_TMP_PATH, FILE_WRITE);
+    if (!tmp) {
+        floorplanError = "registry_open_failed";
+        return false;
+    }
+
+    for (const auto& item: floorplans) {
+        tmp.println(fieldsToJson({{"session", item.first, FIELD_STRING}, {"name", item.second, FIELD_STRING}}));
+    }
+
+    tmp.flush();
+    tmp.close();
+
+    SPIFFS.remove(FLOORPLAN_REGISTRY_BAK_PATH);
+
+    bool hadOld = SPIFFS.exists(FLOORPLAN_REGISTRY_PATH);
+    if (hadOld && !SPIFFS.rename(FLOORPLAN_REGISTRY_PATH, FLOORPLAN_REGISTRY_BAK_PATH)) {
+        SPIFFS.remove(FLOORPLAN_REGISTRY_TMP_PATH);
+        floorplanError = "registry_backup_failed";
+        return false;
+    }
+
+    if (!SPIFFS.rename(FLOORPLAN_REGISTRY_TMP_PATH, FLOORPLAN_REGISTRY_PATH)) {
+        if (hadOld && SPIFFS.exists(FLOORPLAN_REGISTRY_BAK_PATH)) {
+            SPIFFS.rename(FLOORPLAN_REGISTRY_BAK_PATH, FLOORPLAN_REGISTRY_PATH);
+        }
+        floorplanError = "registry_commit_failed";
+        return false;
+    }
+
+    SPIFFS.remove(FLOORPLAN_REGISTRY_BAK_PATH);
+    return true;
+}
+
+bool CleaningHistory::isFloorplan(const String& filename) {
+    ensureFloorplansLoaded();
+    return floorplans.find(filename) != floorplans.end();
+}
+
+String CleaningHistory::listFloorplansJson() {
+    ensureFloorplansLoaded();
+
+    String json = "[";
+    bool first = true;
+
+    for (const auto& item: floorplans) {
+        String path = String(HISTORY_DIR) + "/" + item.first;
+        if (!SPIFFS.exists(path))
+            continue;
+
+        File file = SPIFFS.open(path, FILE_READ);
+        size_t size = file ? file.size() : 0;
+        if (file)
+            file.close();
+
+        String firstLine;
+        String lastLine;
+        readFirstLastLines(path, item.first.endsWith(".hs"), firstLine, lastLine);
+
+        if (!first)
+            json += ",";
+        first = false;
+
+        json += "{\"id\":\"" + jsonEscape(item.first) + "\",\"session\":\"" + jsonEscape(item.first) +
+                "\",\"name\":\"" + jsonEscape(item.second) + "\",\"size\":" +
+                String(static_cast<unsigned long>(size)) + ",\"compressed\":" +
+                String(item.first.endsWith(".hs") ? "true" : "false");
+
+        if (lastLine.indexOf("\"type\":\"summary\"") >= 0) {
+            json += ",\"summary\":" + lastLine;
+        } else {
+            json += ",\"summary\":null";
+        }
+
+        json += "}";
+    }
+
+    json += "]";
+    return json;
+}
+
+bool CleaningHistory::saveFloorplan(const String& filename, const String& requestedName) {
+    ensureFloorplansLoaded();
+    floorplanError = "";
+
+    if (!isStableHistoryFilename(filename)) {
+        floorplanError = "invalid_session";
+        return false;
+    }
+
+    String name = requestedName;
+    name.trim();
+
+    if (name.isEmpty()) {
+        floorplanError = "name_required";
+        return false;
+    }
+
+    if (name.length() > FLOORPLAN_NAME_MAX_BYTES) {
+        floorplanError = "name_too_long";
+        return false;
+    }
+
+    String path = String(HISTORY_DIR) + "/" + filename;
+    if (!SPIFFS.exists(path)) {
+        floorplanError = "session_not_found";
+        return false;
+    }
+
+    // Never pin a recording or a file that is still being compressed.
+    if ((collecting && activeFilePath == path) ||
+        (compressing && (compressSrcPath == path || compressDstPath == path))) {
+        floorplanError = "session_busy";
+        return false;
+    }
+
+    String firstLine;
+    String lastLine;
+    readFirstLastLines(path, filename.endsWith(".hs"), firstLine, lastLine);
+    if (lastLine.indexOf("\"type\":\"summary\"") < 0) {
+        floorplanError = "session_not_complete";
+        return false;
+    }
+
+    auto existing = floorplans.find(filename);
+    bool isNew = existing == floorplans.end();
+
+    if (isNew && floorplans.size() >= FLOORPLAN_MAX_COUNT) {
+        floorplanError = "floorplan_limit";
+        return false;
+    }
+
+    String oldName;
+    if (!isNew)
+        oldName = existing->second;
+
+    floorplans[filename] = name;
+
+    if (!persistFloorplans()) {
+        if (isNew) {
+            floorplans.erase(filename);
+        } else {
+            floorplans[filename] = oldName;
+        }
+        return false;
+    }
+
+    LOG("HIST", "Floorplan saved: %s -> %s", filename.c_str(), name.c_str());
+    return true;
+}
+
+bool CleaningHistory::deleteFloorplan(const String& filename) {
+    ensureFloorplansLoaded();
+    floorplanError = "";
+
+    auto it = floorplans.find(filename);
+    if (it == floorplans.end()) {
+        floorplanError = "floorplan_not_found";
+        return false;
+    }
+
+    String oldName = it->second;
+    floorplans.erase(it);
+
+    if (!persistFloorplans()) {
+        floorplans[filename] = oldName;
+        return false;
+    }
+
+    LOG("HIST", "Floorplan unpinned: %s", filename.c_str());
+    return true;
+}
+
 // -- Storage enforcement (mirrors DataLogger::enforceLimits) -----------------
 
 void CleaningHistory::enforceLimits() {
-    // Count session files, sum directory size, and find the oldest in one pass
+    ensureFloorplansLoaded();
+
+    // Count session files, sum directory size, and find the oldest unpinned
+    // session in one pass. Saved floorplans remain part of the real byte/file
+    // budget, but are never selected as eviction candidates.
     int fileCount = 0;
     size_t histDirBytes = 0;
     String oldest;
@@ -846,7 +1086,7 @@ void CleaningHistory::enforceLimits() {
         histDirBytes += entry.size();
         if (name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) {
             fileCount++;
-            if (oldest.isEmpty() || name < oldest) {
+            if (!isFloorplan(name) && (oldest.isEmpty() || name < oldest)) {
                 oldest = name;
             }
         }
@@ -1060,6 +1300,11 @@ std::shared_ptr<LogReader> CleaningHistory::readSession(const String& filename) 
 }
 
 bool CleaningHistory::deleteSession(const String& filename) {
+    if (isFloorplan(filename)) {
+        floorplanError = "floorplan_protected";
+        return false;
+    }
+
     String path = String(HISTORY_DIR) + "/" + filename;
     if (!SPIFFS.exists(path))
         return false;
@@ -1068,6 +1313,8 @@ bool CleaningHistory::deleteSession(const String& filename) {
 }
 
 void CleaningHistory::deleteAllSessions() {
+    ensureFloorplansLoaded();
+
     File root = SPIFFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return;
@@ -1079,11 +1326,27 @@ void CleaningHistory::deleteAllSessions() {
         entry = root.openNextFile();
     }
 
+    size_t deleted = 0;
+    size_t protectedCount = 0;
+
     for (const auto& p: paths) {
-        SPIFFS.remove(p);
+        String name = p;
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0)
+            name = name.substring(slash + 1);
+
+        if (isFloorplan(name)) {
+            protectedCount++;
+            continue;
+        }
+
+        if (SPIFFS.remove(p)) {
+            metaCache.erase(name);
+            deleted++;
+        }
     }
-    metaCache.clear();
-    LOG("HIST", "Deleted %u session files", paths.size());
+
+    LOG("HIST", "Deleted %u history files, preserved %u floorplans", deleted, protectedCount);
 }
 
 // -- Session import (compress-on-write from browser upload) -------------------

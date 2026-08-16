@@ -391,6 +391,48 @@ void WebServer::registerMapRoutes() {
     registerGetRoute("/api/mapping", mappingMgr, &MappingManager::getStatusJson);
     registerPostRoute("/api/mapping", mappingMgr, &MappingManager::control, {"action"});
 
+    // Saved floorplans are metadata-only pins to completed history sessions.
+    // No map bytes are copied: /api/history/<session> remains the source data.
+    loggedRoute("/api/floorplans", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+        request->send(200, "application/json", historyMgr.listFloorplansJson());
+        return 200;
+    });
+
+    loggedRoute("/api/floorplans", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        if (!request->hasParam("session") || !request->hasParam("name")) {
+            sendError(request, 400, "missing session or name");
+            return 400;
+        }
+
+        String session = request->getParam("session")->value();
+        String name = request->getParam("name")->value();
+
+        if (!historyMgr.saveFloorplan(session, name)) {
+            sendError(request, 409, historyMgr.getFloorplanError());
+            return 409;
+        }
+
+        sendOk(request);
+        return 200;
+    });
+
+    loggedRoute("/api/floorplans", HTTP_DELETE, [this](AsyncWebServerRequest *request) -> int {
+        String session = request->url().substring(String("/api/floorplans/").length());
+
+        if (session.isEmpty()) {
+            sendError(request, 400, "missing session");
+            return 400;
+        }
+
+        if (!historyMgr.deleteFloorplan(session)) {
+            sendError(request, 404, historyMgr.getFloorplanError());
+            return 404;
+        }
+
+        sendOk(request);
+        return 200;
+    });
+
     // GET /api/history[/filename] — list sessions, collection status, or download a specific file
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
@@ -453,6 +495,11 @@ void WebServer::registerMapRoutes() {
             historyMgr.deleteAllSessions();
             sendOk(request);
             return 200;
+        }
+
+        if (historyMgr.isFloorplan(filename)) {
+            sendError(request, 409, "floorplan protected");
+            return 409;
         }
 
         if (historyMgr.deleteSession(filename)) {

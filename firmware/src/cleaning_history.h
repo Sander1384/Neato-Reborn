@@ -44,6 +44,15 @@ public:
     bool deleteSession(const String& filename);
     void deleteAllSessions();
 
+    // -- Saved floorplans -----------------------------------------------------
+    // A floorplan is a protected reference to one completed history session.
+    // The map file stays in /history; only name + filename are persisted.
+    String listFloorplansJson();
+    bool saveFloorplan(const String& filename, const String& name);
+    bool deleteFloorplan(const String& filename);
+    bool isFloorplan(const String& filename);
+    const String& getFloorplanError() const { return floorplanError; }
+
     // Called by WebServer when a clean command is sent via API.
     // Switches to active polling so collection starts immediately
     // instead of waiting for the next idle-interval tick.
@@ -137,6 +146,15 @@ private:
 
     // Storage enforcement — delete oldest sessions when budget exceeded
     void enforceLimits();
+
+    // -- Saved floorplan registry ---------------------------------------------
+    void ensureFloorplansLoaded();
+    bool persistFloorplans();
+    static bool isStableHistoryFilename(const String& filename);
+
+    std::map<String, String> floorplans; // history filename -> user-visible name
+    bool floorplansLoaded = false;
+    String floorplanError;
 
     // -- Import state (separate from recording compression) -------------------
     bool importing = false;
