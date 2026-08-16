@@ -19,8 +19,10 @@ interface SessionCardProps {
     filename: string;
     index: number;
     active?: boolean;
+    saved?: boolean;
     onSelect: (i: number) => void;
     onDelete: (i: number) => void;
+    onSaveFloorplan: (i: number) => void;
     distanceUnit: DistanceUnit;
 }
 
@@ -30,8 +32,10 @@ function SessionCard({
     filename,
     index,
     active,
+    saved,
     onSelect,
     onDelete,
+    onSaveFloorplan,
     distanceUnit,
 }: SessionCardProps) {
     const { t, formatDateTime, formatDuration, formatNumber } = useI18n();
@@ -49,6 +53,11 @@ function SessionCard({
                             {active && (
                                 <span class="history-running-badge">
                                     <T>Running</T>
+                                </span>
+                            )}
+                            {saved && !active && (
+                                <span class="history-running-badge">
+                                    <T>Saved</T>
                                 </span>
                             )}
                         </span>
@@ -81,7 +90,12 @@ function SessionCard({
                     <Icon svg={downloadSvg} />
                 </a>
             )}
-            {!active && (
+            {!active && !saved && (
+                <button type="button" class="history-session-save-map" onClick={() => onSaveFloorplan(index)}>
+                    <T>Save Map</T>
+                </button>
+            )}
+            {!active && !saved && (
                 <button
                     type="button"
                     class="history-session-delete"
@@ -99,8 +113,10 @@ interface HistoryListViewProps {
     files: HistoryFileInfo[];
     hasRecording: boolean;
     deleting: boolean;
+    savedSessions: Set<string>;
     onSelect: (idx: number) => void;
     onDeleteSession: (idx: number) => void;
+    onSaveFloorplan: (idx: number) => void;
     onDeleteAll: () => void;
     onImported: () => void;
     onError: (msg: string) => void;
@@ -113,8 +129,10 @@ export function HistoryListView({
     files,
     hasRecording,
     deleting,
+    savedSessions,
     onSelect,
     onDeleteSession,
+    onSaveFloorplan,
     onDeleteAll,
     onImported,
     onError,
@@ -252,15 +270,21 @@ export function HistoryListView({
                     filename={f.name}
                     index={i}
                     active={f.recording}
+                    saved={savedSessions.has(f.name)}
                     onSelect={onSelect}
                     onDelete={() => setConfirmTarget(`session-${i}`)}
+                    onSaveFloorplan={onSaveFloorplan}
                     distanceUnit={distanceUnit}
                 />
             ))}
 
             {confirmTarget && (
                 <ConfirmDialog
-                    message={t(confirmTarget === "__all__" ? "Delete all map data?" : "Delete this session?")}
+                    message={t(
+                        confirmTarget === "__all__"
+                            ? "Delete all unsaved history? Saved floorplans are kept."
+                            : "Delete this session?",
+                    )}
                     confirmLabel={t("Delete")}
                     disabled={deleting}
                     onConfirm={handleConfirmDelete}

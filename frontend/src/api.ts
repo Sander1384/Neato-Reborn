@@ -5,6 +5,7 @@ import type {
     ChargerData,
     ErrorData,
     FirmwareVersion,
+    FloorplanInfo,
     HistoryFileInfo,
     LidarScan,
     LogFileInfo,
@@ -161,9 +162,14 @@ export const api = {
     deleteAllLogs: () => del("/api/logs"),
     getHistoryList: () => get<HistoryFileInfo[]>("/api/history"),
     getHistorySession: (filename: string) => fetchSessionData(filename),
-    deleteHistorySession: (name: string) => del(`/api/history/${name}`),
+    deleteHistorySession: (name: string) => del(`/api/history/${encodeURIComponent(name)}`),
     deleteAllHistory: () => del("/api/history"),
     importSession: (file: File, onProgress: (pct: number) => void) => importSession(file, onProgress),
+
+    getFloorplans: () => get<FloorplanInfo[]>("/api/floorplans"),
+    saveFloorplan: (session: string, name: string) =>
+        post(`/api/floorplans?session=${encodeURIComponent(session)}&name=${encodeURIComponent(name)}`),
+    deleteFloorplan: (session: string) => del(`/api/floorplans/${encodeURIComponent(session)}`),
     uploadFirmware: (file: File, md5: string, onProgress: (pct: number) => void) =>
         uploadFirmware(file, md5, onProgress),
     saveSchedule: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),

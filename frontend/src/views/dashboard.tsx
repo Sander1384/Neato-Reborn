@@ -233,6 +233,15 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     <button
                         type="button"
                         class="header-right-btn"
+                        aria-label={t("Saved Floorplans")}
+                        onClick={() => navigate("/floorplans")}
+                        disabled={!robotReady}
+                    >
+                        <Icon svg={houseSvg} />
+                    </button>
+                    <button
+                        type="button"
+                        class="header-right-btn"
                         aria-label={t("Cleaning History")}
                         onClick={() => navigate("/history")}
                         disabled={!robotReady}

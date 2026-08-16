@@ -1008,6 +1008,29 @@ paths:
                 $ref: "#/components/schemas/Error"
 components:
   schemas:
+    FloorplanInfo:
+      type: object
+      required:
+        - id
+        - session
+        - name
+        - size
+        - compressed
+      properties:
+        id:
+          type: string
+        session:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        compressed:
+          type: boolean
+        summary:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MapSummary"
     Ok:
       type: object
       properties:

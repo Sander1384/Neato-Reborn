@@ -3192,3 +3192,106 @@ input:disabled {
         font-size: 28px;
     }
 }
+
+/* Neato Reborn Map Manager */
+.history-session-save-map {
+    flex: 0 0 auto;
+    align-self: stretch;
+    border: 0;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent);
+    padding: 0 0.8rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.history-session-save-map:hover {
+    background: var(--surface-raised);
+}
+
+.floorplan-summary-note {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-align: right;
+}
+
+.floorplan-row-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+}
+
+.floorplan-row-btn {
+    border: 0;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent);
+    padding: 0 0.8rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.floorplan-row-btn:hover {
+    background: var(--surface-raised);
+}
+
+.floorplan-row-btn.danger {
+    color: var(--red);
+}
+
+.floorplan-row-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.floorplan-detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--surface);
+}
+
+.floorplan-detail-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 650;
+}
+
+.floorplan-detail-actions .floorplan-row-btn {
+    align-self: stretch;
+    border-left: 0;
+    border-radius: 0.5rem;
+}
+
+@media (max-width: 600px) {
+    .floorplan-summary-note {
+        display: none;
+    }
+
+    .floorplan-row-actions {
+        flex-direction: column;
+    }
+
+    .floorplan-row-btn {
+        border-left: 1px solid var(--border);
+        padding: 0 0.55rem;
+        font-size: 0.72rem;
+    }
+
+    .history-session-save-map {
+        padding: 0 0.55rem;
+        font-size: 0.72rem;
+    }
+}

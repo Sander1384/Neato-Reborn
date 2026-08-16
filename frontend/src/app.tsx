@@ -8,6 +8,7 @@ import type { FirmwareVersion, ManualStatus, StateData } from "./types";
 import { checkForUpdate, getAvailableUpdate, type UpdateInfo } from "./update";
 import { BatteryView } from "./views/battery";
 import { DashboardView } from "./views/dashboard";
+import { FloorplansView } from "./views/floorplans";
 import { HistoryView } from "./views/history";
 import { LogsView } from "./views/logs";
 import { ManualView } from "./views/manual";
@@ -201,6 +202,9 @@ export function App() {
                 </Route>
                 <Route path="/logs" prefix>
                     <LogsView />
+                </Route>
+                <Route path="/floorplans" prefix>
+                    <FloorplansView distanceUnit={distanceUnit} />
                 </Route>
                 <Route path="/history" prefix>
                     <HistoryView distanceUnit={distanceUnit} />

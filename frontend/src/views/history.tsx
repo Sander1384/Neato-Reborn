@@ -8,7 +8,7 @@ import { useNavigate, usePath } from "../components/router";
 import { usePoll } from "../hooks/use-poll";
 import { T, useI18n } from "../i18n";
 import type { DistanceUnit } from "../distance-units";
-import type { HistoryFileInfo, MapData } from "../types";
+import type { FloorplanInfo, HistoryFileInfo, MapData } from "../types";
 import { normalizeError } from "../utils";
 import { HistoryItemView } from "./history/item";
 import { HistoryListView } from "./history/list";
@@ -26,6 +26,7 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
     const path = usePath();
     const [errors, errorStack] = useErrorStack();
     const [files, setFiles] = useState<HistoryFileInfo[]>([]);
+    const [floorplans, setFloorplans] = useState<FloorplanInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMap, setSelectedMap] = useState<MapData | null>(null);
     const [mapEmpty, setMapEmpty] = useState(false);
@@ -53,8 +54,11 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
     useEffect(() => {
         setLoading(true);
         setListCorrupted(false);
-        api.getHistoryList()
-            .then((fileList) => setFiles(sortByDateDesc(fileList)))
+        Promise.all([api.getHistoryList(), api.getFloorplans()])
+            .then(([fileList, saved]) => {
+                setFiles(sortByDateDesc(fileList));
+                setFloorplans(saved);
+            })
             .catch((e: unknown) => {
                 if (e instanceof ResponseParseError) {
                     setListCorrupted(true);
@@ -146,8 +150,10 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
     const handleDeleteAll = useCallback(() => {
         setDeleting(true);
         api.deleteAllHistory()
-            .then(() => {
-                setFiles([]);
+            .then(() => Promise.all([api.getHistoryList(), api.getFloorplans()]))
+            .then(([fileList, saved]) => {
+                setFiles(sortByDateDesc(fileList));
+                setFloorplans(saved);
                 setListCorrupted(false);
                 if (selectedName) navigate("/history");
             })
@@ -156,6 +162,29 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
             })
             .finally(() => setDeleting(false));
     }, [selectedName, navigate, errorStack]);
+
+    const savedSessions = useMemo(() => new Set(floorplans.map((f) => f.session)), [floorplans]);
+
+    const handleSaveFloorplan = useCallback(
+        (idx: number) => {
+            const file = files[idx];
+            if (!file || file.recording || savedSessions.has(file.name)) return;
+
+            const requested = window.prompt(t("Floorplan name"), t("Floorplan"));
+            if (requested === null) return;
+
+            const name = requested.trim();
+            if (!name) return;
+
+            api.saveFloorplan(file.name, name)
+                .then(() => api.getFloorplans())
+                .then((saved) => setFloorplans(saved))
+                .catch((e: unknown) => {
+                    errorStack.push(normalizeError(e, "Failed to save floorplan"));
+                });
+        },
+        [files, savedSessions, errorStack, t],
+    );
 
     const handleImported = useCallback(() => {
         api.getHistoryList()
@@ -225,8 +254,10 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                         files={files}
                         hasRecording={false}
                         deleting={false}
+                        savedSessions={savedSessions}
                         onSelect={handleSelect}
                         onDeleteSession={handleDeleteSession}
+                        onSaveFloorplan={handleSaveFloorplan}
                         onDeleteAll={handleDeleteAll}
                         onImported={handleImported}
                         onError={errorStack.push}
@@ -239,8 +270,10 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                         files={files}
                         hasRecording={hasRecording}
                         deleting={deleting}
+                        savedSessions={savedSessions}
                         onSelect={handleSelect}
                         onDeleteSession={handleDeleteSession}
+                        onSaveFloorplan={handleSaveFloorplan}
                         onDeleteAll={handleDeleteAll}
                         onImported={handleImported}
                         onError={errorStack.push}
@@ -260,7 +293,7 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
 
                 {confirmReset && (
                     <ConfirmDialog
-                        message={t("Delete all map data?")}
+                        message={t("Delete all unsaved history? Saved floorplans are kept.")}
                         confirmLabel={t("Delete")}
                         disabled={deleting}
                         onConfirm={() => {
