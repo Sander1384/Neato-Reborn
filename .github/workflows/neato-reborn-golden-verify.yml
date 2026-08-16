@@ -1,6 +1,9 @@
 name: Neato Reborn Golden Build Verify
 
 on:
+  push:
+    branches:
+      - develop
   workflow_dispatch:
 
 permissions:
