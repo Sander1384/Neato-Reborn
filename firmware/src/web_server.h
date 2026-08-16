@@ -15,6 +15,7 @@ class SystemManager;
 class FirmwareManager;
 class SettingsManager;
 class ManualCleanManager;
+class MappingManager;
 class NotificationManager;
 class CleaningHistory;
 class WiFiManager;
@@ -23,8 +24,8 @@ class Scheduler;
 class WebServer {
 public:
     WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
-              SettingsManager& settings, ManualCleanManager& manual, NotificationManager& notif,
-              CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
+              SettingsManager& settings, ManualCleanManager& manual, MappingManager& mapping,
+              NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
     void begin();
 
     // Last time any API request was received (millis()). Any module can check
@@ -39,6 +40,7 @@ private:
     FirmwareManager& fwMgr;
     SettingsManager& settingsMgr;
     ManualCleanManager& manualMgr;
+    MappingManager& mappingMgr;
     NotificationManager& notifMgr;
     CleaningHistory& historyMgr;
     WiFiManager& wifiMgr;

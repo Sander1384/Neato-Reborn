@@ -6,6 +6,7 @@
 #include "settings_manager.h"
 #include "firmware_manager.h"
 #include "manual_clean_manager.h"
+#include "mapping_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
 #include "wifi_manager.h"
@@ -16,9 +17,10 @@ unsigned long WebServer::lastApiActivity = 0;
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
                      FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
-                     NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler) :
+                     MappingManager& mapping, NotificationManager& notif, CleaningHistory& history,
+                     WiFiManager& wifi, Scheduler& scheduler) :
     server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual),
-    notifMgr(notif), historyMgr(history), wifiMgr(wifi), scheduler(scheduler) {}
+    mappingMgr(mapping), notifMgr(notif), historyMgr(history), wifiMgr(wifi), scheduler(scheduler) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -383,6 +385,11 @@ void WebServer::registerFirmwareRoutes() {
 // -- Map data endpoints -------------------------------------------------------
 
 void WebServer::registerMapRoutes() {
+
+    // Native mapping mode: the robot keeps ownership of House SLAM/navigation
+    // while Clean CleaningDisable suppresses the cleaning motors.
+    registerGetRoute("/api/mapping", mappingMgr, &MappingManager::getStatusJson);
+    registerPostRoute("/api/mapping", mappingMgr, &MappingManager::control, {"action"});
 
     // GET /api/history[/filename] — list sessions, collection status, or download a specific file
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {

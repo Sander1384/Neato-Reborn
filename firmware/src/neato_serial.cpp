@@ -303,6 +303,10 @@ void NeatoSerial::getCharger(std::function<void(bool, const ChargerData&)> callb
     chargerCache.get(callback);
 }
 
+void NeatoSerial::getChargerFresh(std::function<void(bool, const ChargerData&)> callback) {
+    fetchCharger(callback);
+}
+
 void NeatoSerial::getBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback) {
     analogCache.get(callback);
 }
@@ -591,6 +595,11 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
         }
     }
     return enqueue(buildSetEvent(EVT_START_HOUSE), wrapAction(callback), PRIORITY_HIGH);
+}
+
+bool NeatoSerial::setCleaningEnabled(bool enabled, std::function<void(bool)> callback) {
+    const char *cmd = enabled ? CMD_CLEANING_ENABLE : CMD_CLEANING_DISABLE;
+    return enqueue(cmd, wrapAction(callback), PRIORITY_HIGH);
 }
 
 bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {

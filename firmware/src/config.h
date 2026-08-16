@@ -188,6 +188,13 @@ enum CommandStatus {
 #define NOTIF_INTERVAL_ACTIVE_MS 3000 // Check state every 3s when robot is active (cleaning/docking)
 #define NOTIF_INTERVAL_IDLE_MS 30000 // Check state every 30s when robot is idle
 
+// Native mapping mode
+#define MAPPING_POLL_MS 1000 // State/dock transition polling while mapping
+#define MAPPING_START_TIMEOUT_MS 30000 // House navigation must become active within 30s
+#define MAPPING_UNDOCK_TIMEOUT_MS 60000 // Robot must leave the dock within 60s
+#define MAPPING_RETURN_TIMEOUT_MS 300000 // Allow up to 5 minutes to find and reach the dock
+#define MAPPING_RESTORE_ATTEMPTS 3 // Best-effort retries for Clean CleaningEnable
+
 // Cleaning history
 #define HISTORY_INTERVAL_IDLE_MS 30000 // Poll state every 30s when idle (detect cleaning start)
 #define HISTORY_INTERVAL_ACTIVE_MS 2000 // Poll state/pose every 2s during active cleaning (~0.6m resolution at 300mm/s)

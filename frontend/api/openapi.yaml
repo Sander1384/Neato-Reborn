@@ -28,6 +28,8 @@ tags:
     description: ESP32 firmware version and OTA update
   - name: History
     description: Cleaning session history and map data
+  - name: Mapping
+    description: Native map-only runs using the robot's own SLAM and navigation
 paths:
   /api/version:
     get:
@@ -402,6 +404,46 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Ok"
+  /api/mapping:
+    get:
+      tags:
+        - Mapping
+      summary: Get native mapping run status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingStatus"
+    post:
+      tags:
+        - Mapping
+      summary: Start a native map-only run or request return to dock
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - start
+              - stop
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: mapping action unavailable in current robot state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot command failed or timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/manual/status:
     get:
       tags:
@@ -890,6 +932,48 @@ components:
           type: boolean
       required:
         - ok
+    MappingStatus:
+      type: object
+      properties:
+        active:
+          type: boolean
+        state:
+          type: string
+          enum:
+            - idle
+            - starting
+            - disabling_cleaning
+            - mapping
+            - returning
+            - restoring
+            - error
+        cleaningDisabled:
+          type: boolean
+        leftDock:
+          type: boolean
+        stopRequested:
+          type: boolean
+        elapsedSeconds:
+          type: integer
+        lastResult:
+          type: string
+        error:
+          type: string
+        uiState:
+          type: string
+        robotState:
+          type: string
+      required:
+        - active
+        - state
+        - cleaningDisabled
+        - leftDock
+        - stopRequested
+        - elapsedSeconds
+        - lastResult
+        - error
+        - uiState
+        - robotState
     ScheduleNextData:
       type: object
       properties:

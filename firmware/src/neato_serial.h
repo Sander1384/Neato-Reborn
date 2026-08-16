@@ -50,6 +50,7 @@ public:
 
     void getVersion(std::function<void(bool, const VersionData&)> callback);
     void getCharger(std::function<void(bool, const ChargerData&)> callback);
+    void getChargerFresh(std::function<void(bool, const ChargerData&)> callback);
     void getBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback);
     void getBatteryWarranty(std::function<void(bool, const BatteryWarrantyData&)> callback);
     void getUserSettings(std::function<void(bool, const UserSettingsData&)> callback);
@@ -65,6 +66,7 @@ public:
     // -- Action commands (fire-and-forget by default) ------------------------
 
     bool clean(const String& action, std::function<void(bool)> callback = nullptr);
+    bool setCleaningEnabled(bool enabled, std::function<void(bool)> callback = nullptr);
     bool testMode(bool enable, std::function<void(bool)> callback = nullptr);
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);

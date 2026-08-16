@@ -62,12 +62,15 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
 - `Help [Cmd]` — List all commands or help for specific command
   - Without argument: prints list of all commands
   - With command name: prints help for that specific command
-- `Clean [House|Spot|Stop]` — Cleaning control
+- `Clean [House|Spot|Stop|CleaningEnable|CleaningDisable]` — Cleaning control
   - *(no flag)* — Equivalent to pressing 'Start' button. Starts house cleaning
     or resumes a paused house clean without triggering "new cleaning" sounds
   - `House` (Optional) — Explicitly starts a NEW house clean (triggers start sound)
   - `Spot` (Optional) — Starts or resumes a spot clean
   - `Stop` — Stop Cleaning (first call pauses, second call stops)
+  - `CleaningDisable` — Disable the cleaning motors while native House
+    navigation/SLAM continues. Confirmed on Botvac D6 hardware.
+  - `CleaningEnable` — Restore the normal cleaning function after a map-only run.
 - `GetVersion` — Software/hardware version info
 - `GetCharger` — Battery and charging data
 - `GetAnalogSensors [raw] [stats]` — A2D analog sensor readings
