@@ -3213,7 +3213,7 @@ input:disabled {
 }
 
 .floorplan-summary-note {
-    color: var(--text-secondary);
+    color: var(--text-dim);
     font-size: 0.8rem;
     text-align: right;
 }
