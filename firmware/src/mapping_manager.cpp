@@ -165,19 +165,24 @@ void MappingManager::startDisablingCleaning() {
 
     state = MappingState::DISABLING_CLEANING;
 
+    // Be conservative as soon as CleaningDisable is requested. A UART timeout
+    // or desync does not prove the robot ignored the command; it may already
+    // have disabled the motors. Keeping this flag set guarantees every failure
+    // path still attempts CleaningEnable before the run is considered finished.
+    cleaningDisabled = true;
+
     serial.setCleaningEnabled(false, [this](bool ok) {
         if (state != MappingState::DISABLING_CLEANING)
             return;
 
         if (!ok) {
-            LOG("MAP", "CleaningDisable failed, returning to dock");
+            LOG("MAP", "CleaningDisable unconfirmed, returning to dock and restoring");
 
             finishStart(false);
-            sendDock("failed", "cleaning_disable_failed");
+            sendDock("failed", "cleaning_disable_unconfirmed");
             return;
         }
 
-        cleaningDisabled = true;
         mappingStartedAtMs = millis();
         state = MappingState::MAPPING;
 
@@ -327,22 +332,15 @@ void MappingManager::pollRunState() {
             return;
         }
 
-        if (!charger.extPwrPresent)
+        const bool extPwrPresent = charger.extPwrPresent;
+
+        if (!extPwrPresent)
             leftDock = true;
 
-        if (leftDock && charger.extPwrPresent) {
-            pollPending = false;
-
-            if (state == MappingState::MAPPING) {
-                // Native House navigation completed and returned home itself.
-                beginRestore("completed", "");
-            } else if (state == MappingState::RETURNING) {
-                beginRestore(pendingResult, pendingError);
-            }
-            return;
-        }
-
-        serial.getState([this](bool stateOk, const RobotState& robotState) {
+        // Always pair dock contact with a fresh robot state. A native House run
+        // can return to the base for recharge-and-resume (ST_M1_Charging_Cleaning);
+        // dock contact alone therefore does not mean the map run is complete.
+        serial.getState([this, extPwrPresent](bool stateOk, const RobotState& robotState) {
             pollPending = false;
 
             if (!stateOk)
@@ -350,6 +348,38 @@ void MappingManager::pollRunState() {
 
             lastUiState = robotState.uiState;
             lastRobotState = robotState.robotState;
+
+            if (!leftDock || !extPwrPresent)
+                return;
+
+            if (state == MappingState::RETURNING) {
+                // SEND_TO_BASE was explicitly requested by Mapping Mode.
+                beginRestore(pendingResult, pendingError);
+                return;
+            }
+
+            if (state != MappingState::MAPPING)
+                return;
+
+            const bool rechargeAndResume =
+                    robotState.robotState.indexOf("ST_M1_Charging_Cleaning") >= 0 ||
+                    robotState.uiState.indexOf("CLEANINGSUSPENDED") >= 0;
+
+            if (rechargeAndResume) {
+                LOG("MAP", "Native recharge-and-resume detected, keeping cleaning disabled");
+                return;
+            }
+
+            const bool completedAtDock =
+                    robotState.uiState.indexOf("IDLE") >= 0 ||
+                    robotState.uiState.indexOf("STANDBY") >= 0 ||
+                    robotState.robotState.indexOf("ST_C_Standby") >= 0 ||
+                    robotState.robotState.indexOf("ST_M2_Charging_StdBy") >= 0;
+
+            if (completedAtDock) {
+                // Native House navigation completed and returned home itself.
+                beginRestore("completed", "");
+            }
         });
     });
 }
