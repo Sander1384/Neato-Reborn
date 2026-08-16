@@ -1,0 +1,71 @@
+name: Neato Reborn Golden Build Verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-c3:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout exact golden source
+        uses: actions/checkout@v7
+        with:
+          ref: c295660c7ec9bbcfdec55bf6283901f8d328d0a3
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install exact PlatformIO
+        run: pip install -r .github/platformio-requirements.txt
+
+      - name: Build golden C3 release
+        env:
+          FIRMWARE_VERSION: "0.15"
+        run: pio run -e c3-release
+
+      - name: Verify golden SHA256
+        shell: bash
+        run: |
+          FILE=".pio/build/c3-release/openneato-esp32-c3-firmware.bin"
+          EXPECTED="9bfb5bc6110dd771689e990abcefe32762e5b20000850a7b2f4931ccad23f943"
+
+          ACTUAL="$(sha256sum "$FILE" | awk '{print $1}')"
+
+          echo "Built:    $ACTUAL"
+          echo "Expected: $EXPECTED"
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Golden firmware SHA256 mismatch"
+            exit 1
+          fi
+
+          echo "GOLDEN BYTE MATCH: PASS"
+
+      - name: Upload verified firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: nr-golden-v0.15-verified
+          path: |
+            .pio/build/c3-release/openneato-esp32-c3-firmware.bin
+            .pio/build/c3-release/openneato-esp32-c3-full.tar.gz
